@@ -52,7 +52,21 @@
   <li>Of a method or technique of measurement: <em>yields consistent results when repeated under identical conditions.</em></li>
 </ul>
 
-<p>This gives us warm, fuzzy feelings toward TCP that it doesn't properly deserve. That is, it might  suggest "TCP never fails" rather than "TCP never <em>silently</em> fails." Furthermore, failure is defined to some extent by the user: all of TCP's sequencing and retransmission of lost packets takes time — occasionally a <em>really long</em> time — and we simply can't wait forever. We typically have some (perhaps limited) control over <a href="http://tools.ietf.org/html/rfc793#page-41">retransmission timeouts</a>, and our socket APIs should always provide control over <a href="http://tools.ietf.org/html/rfc793#page-46">user timeouts</a> (for example, <a href="http://pubs.opengroup.org/onlinepubs/9699919799/functions/setsockopt.html">setsockopt</a>). Still, we rely on defaults and neglect to handle failures, complacent in our ignorance, because "TCP is reliable."</p>
+<p>This gives us warm, fuzzy feelings toward TCP that it doesn't properly deserve. That is, it might  inappropriately suggest "TCP never fails" rather than "TCP never <em>silently</em> fails." Furthermore, failure is defined to some extent by the user: all of TCP's sequencing and retransmission of lost packets takes time — occasionally a <em>really long</em> time — and we simply can't wait forever. We typically have some (perhaps limited) control over <a href="http://tools.ietf.org/html/rfc793#page-41">retransmission timeouts</a>, and our socket APIs should always provide control over <a href="http://tools.ietf.org/html/rfc793#page-46">user timeouts</a> (for example, POSIX's <a href="http://pubs.opengroup.org/onlinepubs/9699919799/functions/setsockopt.html">setsockopt</a>). Still, we rely on implementation-defined default timeouts and neglect to handle failures, complacent in our ignorance, because "TCP is reliable."</p>
+
+<h2>if at first you don't succeed</h2>
+
+<p>TCP is a <a href="http://tools.ietf.org/html/rfc793#page-23">connection-oriented</a>, <a href="http://tools.ietf.org/html/rfc793#page-5">multiplexing</a> protocol over IP, where a connection is identified by the IP address and port for the local and remote hosts. So suppose we're conscientiously setting artisanal timeouts for all our TCP messages. If an individual packet is lost, as determined by the retransmit timeout, it's sent again over the same connection; if a user timeout is reached, the connection is closed.</p>
+
+<p>This might not be the behavior we want. For example:</p>
+
+<ul>
+  <li>If the application can tolerate some degree of packet loss, then we may want finer-grained control over retransmission. We might even prefer no retransmission at all, for real-time applications.</li>
+  <li>If a client can load balance over a pool of servers, then it might make more sense to retransmit to a different server after the loss of a packet, than to retransmit to the same server. Again, this depends on the application.</li>
+  <li>Mobile devices may change their IP addresses frequently as they move between wireless networks. TCP regards this as a new connection, so we either have to restart the interrupted stream from scratch, or the application layer needs to have its own notion of stream state, separate from TCP.</li>
+</ul>
+
+<p>The unifying theme here is that <em>the application knows its specific needs</em>, with respect to failure modes and recovery, better than TCP could ever anticipate. When we try to handle network failures in an application built on TCP, we invariably end up poorly reimplementing portions of TCP's own failure handling logic, missing significant optimization opportunities in the process. Layering on TCP in many cases does us <a href="http://tools.ietf.org/html/rfc3439#page-7">more harm than good</a>; this is a variation of the <a href="http://web.mit.edu/saltzer/www/publications/endtoend/endtoend.pdf">end-to-end argument</a>.</p>
 
 <h2>are you serious?</h2>
 
