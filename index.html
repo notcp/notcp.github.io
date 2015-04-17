@@ -52,7 +52,7 @@
   <li>Of a method or technique of measurement: <em>yields consistent results when repeated under identical conditions.</em></li>
 </ul>
 
-<p>This gives us warm, fuzzy feelings toward TCP that it doesn't properly deserve. That is, it might  inappropriately suggest "TCP never fails" rather than "TCP never <em>silently</em> fails." Furthermore, failure is defined to some extent by the user: all of TCP's sequencing and retransmission of lost packets takes time — occasionally a <em>really long</em> time — and we simply can't wait forever. We typically have some (perhaps limited) control over <a href="http://tools.ietf.org/html/rfc793#page-41">retransmission timeouts</a>, and our socket APIs should always provide control over <a href="http://tools.ietf.org/html/rfc793#page-46">user timeouts</a> (for example, POSIX's <a href="http://pubs.opengroup.org/onlinepubs/9699919799/functions/setsockopt.html">setsockopt</a>). Still, we rely on implementation-defined default timeouts and neglect to handle failures, complacent in our ignorance, because "TCP is reliable."</p>
+<p>This gives us warm, fuzzy feelings toward TCP that it doesn't properly deserve. That is, it might inappropriately suggest "TCP never fails" rather than "TCP never <em>silently</em> fails." Furthermore, failure is defined to some extent by the user: all of TCP's sequencing and retransmission of lost packets takes time — occasionally a <em>really long</em> time — and we simply can't wait forever. We typically have some (perhaps limited) control over <a href="http://tools.ietf.org/html/rfc793#page-41">retransmission timeouts</a>, and our socket APIs should always provide control over <a href="http://tools.ietf.org/html/rfc793#page-46">user timeouts</a> (for example, POSIX's <a href="http://pubs.opengroup.org/onlinepubs/9699919799/functions/setsockopt.html">setsockopt</a>). Still, we rely on implementation-defined default timeouts and neglect to handle failures, complacent in our ignorance, because "TCP is reliable."</p>
 
 <h2>if at first you don't succeed</h2>
 
@@ -67,6 +67,14 @@
 </ul>
 
 <p>The unifying theme here is that <em>the application knows its specific needs</em>, with respect to failure modes and recovery, better than TCP could ever anticipate. When we try to handle network failures in an application built on TCP, we invariably end up poorly reimplementing portions of TCP's own failure handling logic, missing significant optimization opportunities in the process. Layering on TCP in many cases does us <a href="http://tools.ietf.org/html/rfc3439#page-7">more harm than good</a>; this is a variation of the <a href="http://web.mit.edu/saltzer/www/publications/endtoend/endtoend.pdf">end-to-end argument</a>.</p>
+
+<h2>throwing good money after bad</h2>
+
+<p>TCP establishes a connection with a <a href="http://tools.ietf.org/html/rfc793#page-28">three way handshake</a>, which is relatively expensive in terms of latency. Adding to the problem is <a href="http://ee.lbl.gov/papers/congavoid.pdf">slow-start</a>, which limits the throughput a new connection for the sake of network congestion avoidance. If we want to establish multiple connections, even between the same two IPs, we need to pay these costs <em>for each connection</em>. This is common for HTTP/1.1 traffic, for example, where a client will fetch multiple resources from the same server in parallel.</p>
+
+<p>We naturally want to avoid these per-connection costs, but here's where things get weird: exhibiting a behavior not entirely dissimilar to Stockholm syndrome, we implement protocols that multiplex over TCP — such as <a href="http://http2.github.io/http2-spec/">HTTP/2</a> — rather than dropping down a layer. We take multiple, logical streams of data and interleave them arbitrarily over a single TCP connection.</p>
+
+<p>The problem now is that TCP gives us an ordering guarantee that's <em>much stronger</em> than we need: <em>all</em> packets are reassembled in order as they're received, but we know that the order in which we interleaved them never mattered to begin with. One delayed packet can artificially delay the availability of the data for <em>all</em> streams multiplexed over that connection; this is one form of <a href="http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.87.892">head-of-line blocking</a>. Again, <em>the application knows its specific needs</em> better than TCP does.</p>
 
 <h2>are you serious?</h2>
 
